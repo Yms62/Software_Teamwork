@@ -18,6 +18,8 @@ type ChatInputProps = {
   attachmentCount?: number
   /** Whether the attachment button should be disabled (e.g., no session). */
   disableAttach?: boolean
+  /** Called when file validation fails (size or type). */
+  onAttachError?: (message: string) => void
 }
 
 export default function ChatInput({
@@ -30,6 +32,7 @@ export default function ChatInput({
   onFileSelect,
   attachmentCount = 0,
   disableAttach = false,
+  onAttachError,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -71,9 +74,25 @@ export default function ChatInput({
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+      // Validate against Gateway contract: max 20 MB, allowed MIME types
+      const ALLOWED_TYPES = [
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+        'text/plain',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ]
+      if (file.size > 20 * 1024 * 1024) {
+        onAttachError?.('文件大小不能超过 20MB')
+        return
+      }
+      if (!ALLOWED_TYPES.includes(file.type) && file.type !== '') {
+        onAttachError?.('不支持的文件类型，仅支持 PDF、PNG、JPEG、TXT、DOCX')
+        return
+      }
       onFileSelect?.(file)
     },
-    [onFileSelect],
+    [onFileSelect, onAttachError],
   )
 
   const canSend = value.trim().length > 0 && !disabled

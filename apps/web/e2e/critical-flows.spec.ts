@@ -121,7 +121,9 @@ async function mockGateway(page: Page) {
     }
     await route.fulfill({
       contentType: 'application/json',
-      json: { error: { code: 'not_implemented', message: 'not implemented', requestId: 'req-att' } },
+      json: {
+        error: { code: 'not_implemented', message: 'not implemented', requestId: 'req-att' },
+      },
       status: 501,
     })
   })

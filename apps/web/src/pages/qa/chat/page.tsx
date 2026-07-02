@@ -289,27 +289,36 @@ export function ChatPage() {
   // ── Attachment upload hook ──
   const handleAttachmentReady = useCallback(
     (attachment: SessionAttachmentSummary) => {
-      if (!activeId) return
-      // Clean up any optimistic temp attachments for this session
-      const current = useChatStore.getState().attachmentsBySession[activeId] ?? []
+      const sid = attachment.sessionId || activeId
+      if (!sid) return
+      const current = useChatStore.getState().attachmentsBySession[sid] ?? []
       const tempIds = current.filter((a) => a.id.startsWith('temp-')).map((a) => a.id)
       for (const tempId of tempIds) {
-        removeAttachment(activeId, tempId)
+        removeAttachment(sid, tempId)
       }
-      // Replace or add the real attachment (updateAttachment covers existing, but add is safer for new)
       const exists = current.some((a) => a.id === attachment.id)
       if (exists) {
-        updateAttachment(activeId, attachment.id, attachment)
+        updateAttachment(sid, attachment.id, attachment)
       } else {
-        addAttachment(activeId, attachment)
+        addAttachment(sid, attachment)
       }
     },
     [activeId, updateAttachment, addAttachment, removeAttachment],
   )
 
+  const handleAttachCleanup = useCallback(() => {
+    if (!activeId) return
+    const current = useChatStore.getState().attachmentsBySession[activeId] ?? []
+    const tempIds = current.filter((a) => a.id.startsWith('temp-')).map((a) => a.id)
+    for (const tempId of tempIds) {
+      removeAttachment(activeId, tempId)
+    }
+  }, [activeId, removeAttachment])
+
   const { uploadState, uploadFile, dismissUpload } = useAttachmentUpload(
     activeId,
     handleAttachmentReady,
+    handleAttachCleanup,
   )
 
   // ── Mutations ──
@@ -1215,6 +1224,7 @@ export function ChatPage() {
               onChange={setInputText}
               size={chatPhase === 'empty' ? 'large' : 'normal'}
               onFileSelect={handleFileSelect}
+              onAttachError={(msg) => setError(msg)}
               attachmentCount={visibleAttachmentCount}
               disableAttach={!activeId}
             />

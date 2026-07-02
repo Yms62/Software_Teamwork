@@ -71,6 +71,7 @@ export default function AttachmentUploadStatus({
 export function useAttachmentUpload(
   sessionId: string | null,
   onAttachmentReady: (attachment: SessionAttachmentSummary) => void,
+  onCleanup?: () => void,
 ) {
   const [state, setState] = useState<UploadStateData>({ phase: 'idle' })
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -92,6 +93,7 @@ export function useAttachmentUpload(
           filename: attachment.filename,
           message: '解析超时，请稍后重试',
         })
+        onCleanup?.()
         return
       }
 
@@ -111,6 +113,7 @@ export function useAttachmentUpload(
               filename: attachment.filename,
               message: updated.errorMessage ?? '文件解析失败',
             })
+            onCleanup?.()
           } else {
             pollTimerRef.current = setTimeout(() => {
               startPoll(updated, attemptsSoFar + 1)
@@ -143,6 +146,7 @@ export function useAttachmentUpload(
       } catch {
         if (!abortedRef.current) {
           setState({ phase: 'error', filename: file.name, message: '上传失败，请重试' })
+          onCleanup?.()
         }
       }
     },
