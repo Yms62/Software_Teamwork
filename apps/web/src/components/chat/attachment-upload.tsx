@@ -75,7 +75,9 @@ export function useAttachmentUpload(
 ) {
   const [state, setState] = useState<UploadStateData>({ phase: 'idle' })
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const abortedRef = useRef(false)
+  /** Per-upload token — incremented on each new upload or dismiss so stale async
+   *  callbacks cannot overwrite the current upload's state. */
+  const uploadTokenRef = useRef(0)
 
   const clearPollTimer = useCallback(() => {
     if (pollTimerRef.current !== null) {
@@ -85,9 +87,11 @@ export function useAttachmentUpload(
   }, [])
 
   const startPoll = useCallback(
-    (attachment: SessionAttachmentSummary, attemptsSoFar: number) => {
-      if (abortedRef.current) return
+    (attachment: SessionAttachmentSummary, attemptsSoFar: number, token: number) => {
+      // Stale upload — a newer upload or dismiss already started
+      if (token !== uploadTokenRef.current) return
       if (attemptsSoFar >= MAX_POLL_ATTEMPTS) {
+        if (token !== uploadTokenRef.current) return
         setState({
           phase: 'error',
           filename: attachment.filename,
@@ -97,12 +101,13 @@ export function useAttachmentUpload(
         return
       }
 
+      if (token !== uploadTokenRef.current) return
       setState({ phase: 'polling', attachment, attempts: attemptsSoFar })
 
       const poll = async () => {
         try {
           const updated = await getSessionAttachment(attachment.sessionId, attachment.id)
-          if (abortedRef.current) return
+          if (token !== uploadTokenRef.current) return
 
           if (updated.status === 'ready') {
             setState({ phase: 'done', attachment: updated })
@@ -116,15 +121,14 @@ export function useAttachmentUpload(
             onCleanup?.()
           } else {
             pollTimerRef.current = setTimeout(() => {
-              startPoll(updated, attemptsSoFar + 1)
+              startPoll(updated, attemptsSoFar + 1, token)
             }, POLL_INTERVAL_MS)
           }
         } catch {
-          if (!abortedRef.current) {
-            pollTimerRef.current = setTimeout(() => {
-              startPoll(attachment, attemptsSoFar + 1)
-            }, POLL_INTERVAL_MS)
-          }
+          if (token !== uploadTokenRef.current) return
+          pollTimerRef.current = setTimeout(() => {
+            startPoll(attachment, attemptsSoFar + 1, token)
+          }, POLL_INTERVAL_MS)
         }
       }
 
@@ -136,33 +140,33 @@ export function useAttachmentUpload(
   const uploadFile = useCallback(
     async (file: File) => {
       if (!sessionId) return
-      abortedRef.current = false
+      const token = ++uploadTokenRef.current
       setState({ phase: 'uploading', filename: file.name })
 
       try {
         const attachment = await uploadSessionAttachment(sessionId, file)
-        if (abortedRef.current) return
-        startPoll(attachment, 0)
+        if (token !== uploadTokenRef.current) return
+        startPoll(attachment, 0, token)
       } catch {
-        if (!abortedRef.current) {
-          setState({ phase: 'error', filename: file.name, message: '上传失败，请重试' })
-          onCleanup?.()
-        }
+        if (token !== uploadTokenRef.current) return
+        setState({ phase: 'error', filename: file.name, message: '上传失败，请重试' })
+        onCleanup?.()
       }
     },
     [sessionId, startPoll, onCleanup],
   )
 
   const dismissUpload = useCallback(() => {
-    abortedRef.current = true
+    uploadTokenRef.current++
     clearPollTimer()
     setState({ phase: 'idle' })
     onCleanup?.()
   }, [clearPollTimer, onCleanup])
 
   useEffect(() => {
+    const tokenRef = uploadTokenRef
     return () => {
-      abortedRef.current = true
+      tokenRef.current++
       clearPollTimer()
     }
   }, [clearPollTimer])

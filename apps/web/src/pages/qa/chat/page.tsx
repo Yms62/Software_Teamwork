@@ -419,7 +419,15 @@ export function ChatPage() {
 
     listSessionAttachments(activeId)
       .then((result) => {
-        setSessionAttachments(activeId, result.items)
+        // Merge server list with local in-flight items (temp-* or recently
+        // uploaded attachments that haven't appeared in the server response
+        // yet). Server items are authoritative for matching IDs; local items
+        // with IDs not present in the server list are preserved so a stale
+        // list response doesn't overwrite a just-completed upload.
+        const serverIds = new Set(result.items.map((a) => a.id))
+        const local = useChatStore.getState().attachmentsBySession[activeId] ?? []
+        const localOnly = local.filter((a) => !serverIds.has(a.id))
+        setSessionAttachments(activeId, [...result.items, ...localOnly])
       })
       .catch(() => {
         // Attachments are optional; don't surface loading errors as critical
@@ -517,13 +525,19 @@ export function ChatPage() {
     const target = deleteAttachmentTarget
     setDeleteAttachmentTarget(null)
     if (!target || !activeId) return
+    // temp-* attachments only exist locally — skip backend call and just clean up
+    if (target.startsWith('temp-')) {
+      removeAttachment(activeId, target)
+      dismissUpload()
+      return
+    }
     try {
       await deleteSessionAttachment(activeId, target)
       removeAttachment(activeId, target)
     } catch {
       setError('删除附件失败')
     }
-  }, [activeId, deleteAttachmentTarget, removeAttachment, setError])
+  }, [activeId, deleteAttachmentTarget, removeAttachment, setError, dismissUpload])
 
   const handleToggleAttachmentExcluded = useCallback(
     (attachmentId: string) => {

@@ -82,11 +82,24 @@ export default function ChatInput({
         'text/plain',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       ]
+      // Map file extensions to MIME types when the browser returns an empty type
+      const EXT_MIME: Record<string, string> = {
+        '.pdf': 'application/pdf',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.txt': 'text/plain',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }
       if (file.size > 20 * 1024 * 1024) {
         onAttachError?.('文件大小不能超过 20MB')
         return
       }
-      if (!ALLOWED_TYPES.includes(file.type) && file.type !== '') {
+      const effectiveType =
+        file.type !== ''
+          ? file.type
+          : (EXT_MIME[file.name.slice(file.name.lastIndexOf('.')).toLowerCase()] ?? '')
+      if (!ALLOWED_TYPES.includes(effectiveType)) {
         onAttachError?.('不支持的文件类型，仅支持 PDF、PNG、JPEG、TXT、DOCX')
         return
       }
