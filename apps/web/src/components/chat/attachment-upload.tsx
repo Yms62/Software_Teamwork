@@ -107,6 +107,7 @@ export function useAttachmentUpload(
           filename: attachment.filename,
           message: '解析超时，请稍后重试',
         })
+        realAttachmentIdRef.current = null
         onCleanup?.(uploadSessionIdRef.current!)
         return
       }
@@ -122,12 +123,16 @@ export function useAttachmentUpload(
           if (updated.status === 'ready') {
             setState({ phase: 'done', attachment: updated })
             onAttachmentReady(updated)
+            // Attachment is now committed to the session list — clear the ref
+            // so a subsequent upload won't delete it as "previous upload".
+            realAttachmentIdRef.current = null
           } else if (updated.status === 'failed' || updated.status === 'purged') {
             setState({
               phase: 'error',
               filename: attachment.filename,
               message: updated.errorMessage ?? '文件解析失败',
             })
+            realAttachmentIdRef.current = null
             onCleanup?.(uploadSessionIdRef.current!)
           } else {
             pollTimerRef.current = setTimeout(() => {
@@ -204,6 +209,7 @@ export function useAttachmentUpload(
         // Silently ignore — server may not have persisted it yet
       })
     }
+    realAttachmentIdRef.current = null
 
     onCleanup?.(sid!)
   }, [clearPollTimer, onCleanup])
