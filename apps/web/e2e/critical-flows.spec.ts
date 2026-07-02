@@ -109,6 +109,23 @@ async function mockGateway(page: Page) {
     })
   })
 
+  await page.route('**/api/v1/qa-sessions/*/attachments**', async (route) => {
+    const method = route.request().method()
+    if (method === 'GET') {
+      await route.fulfill({
+        contentType: 'application/json',
+        json: { data: [], page: { page: 1, pageSize: 20, total: 0 }, requestId: 'req-att' },
+        status: 200,
+      })
+      return
+    }
+    await route.fulfill({
+      contentType: 'application/json',
+      json: { error: { code: 'not_implemented', message: 'not implemented', requestId: 'req-att' } },
+      status: 501,
+    })
+  })
+
   await page.route('**/api/v1/qa-sessions*', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
