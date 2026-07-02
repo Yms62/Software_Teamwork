@@ -99,12 +99,17 @@ export const useChatStore = create<ChatState>()(
 
       removeSession: (sessionId) =>
         set((state) => {
-          const { [sessionId]: _removed, ...restMessages } = state.messagesBySession
+          const { [sessionId]: _removedMessages, ...restMessages } = state.messagesBySession
+          const { [sessionId]: _removedAttachments, ...restAttachments } =
+            state.attachmentsBySession
+          const { [sessionId]: _removedExcluded, ...restExcluded } = state.excludedAttachmentIds
           return {
             sessions: state.sessions.filter((s) => s.id !== sessionId),
             sessionIds: state.sessionIds.filter((sid) => sid !== sessionId),
             activeId: state.activeId === sessionId ? null : state.activeId,
             messagesBySession: restMessages,
+            attachmentsBySession: restAttachments,
+            excludedAttachmentIds: restExcluded,
           }
         }),
 

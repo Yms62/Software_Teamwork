@@ -506,6 +506,15 @@ export function ChatPage() {
     (file: File) => {
       if (!activeId) return
 
+      // Clean up any stale temp-* items from a previous aborted upload before
+      // adding the new one, so they don't accumulate in the list indefinitely.
+      const current = useChatStore.getState().attachmentsBySession[activeId] ?? []
+      for (const a of current) {
+        if (a.id.startsWith('temp-')) {
+          removeAttachment(activeId, a.id)
+        }
+      }
+
       // Optimistically add the attachment to the store
       const tempAttachment: SessionAttachmentSummary = {
         id: `temp-${Date.now()}`,
@@ -521,28 +530,33 @@ export function ChatPage() {
       // Start the actual upload + polling flow
       uploadFile(file)
     },
-    [activeId, addAttachment, uploadFile],
+    [activeId, addAttachment, removeAttachment, uploadFile],
   )
 
-  const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<string | null>(null)
+  const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<{
+    sessionId: string
+    attachmentId: string
+  } | null>(null)
 
-  const handleDeleteAttachment = useCallback((attachmentId: string) => {
-    setDeleteAttachmentTarget(attachmentId)
+  const handleDeleteAttachment = useCallback((sessionId: string, attachmentId: string) => {
+    setDeleteAttachmentTarget({ sessionId, attachmentId })
   }, [])
 
   const confirmDeleteAttachment = useCallback(async () => {
     const target = deleteAttachmentTarget
     setDeleteAttachmentTarget(null)
-    if (!target || !activeId) return
+    if (!target) return
+    const { sessionId: targetSid, attachmentId: targetAid } = target
     // temp-* attachments only exist locally — skip backend call and just clean up
-    if (target.startsWith('temp-')) {
-      removeAttachment(activeId, target)
-      dismissUpload()
+    if (targetAid.startsWith('temp-')) {
+      removeAttachment(targetSid, targetAid)
+      // Only dismiss the upload bar if this temp belongs to the current session
+      if (targetSid === activeId) dismissUpload()
       return
     }
     try {
-      await deleteSessionAttachment(activeId, target)
-      removeAttachment(activeId, target)
+      await deleteSessionAttachment(targetSid, targetAid)
+      removeAttachment(targetSid, targetAid)
     } catch {
       setError('删除附件失败')
     }

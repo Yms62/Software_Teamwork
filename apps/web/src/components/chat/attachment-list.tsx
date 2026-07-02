@@ -55,7 +55,7 @@ type AttachmentListProps = {
   attachments: SessionAttachmentSummary[]
   excludedIds: string[]
   onToggleExcluded: (attachmentId: string) => void
-  onDelete: (attachmentId: string) => void
+  onDelete: (sessionId: string, attachmentId: string) => void
   sessionId: string | null
 }
 
@@ -71,9 +71,10 @@ export default function AttachmentList({
 
   const handleDelete = useCallback(
     (id: string) => {
-      onDelete(id)
+      if (!sessionId) return
+      onDelete(sessionId, id)
     },
-    [onDelete],
+    [onDelete, sessionId],
   )
 
   if (!sessionId || visible.length === 0) return null

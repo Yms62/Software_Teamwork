@@ -150,6 +150,17 @@ export function useAttachmentUpload(
   const uploadFile = useCallback(
     async (file: File) => {
       if (!sessionId) return
+
+      // Clean up the previous upload's real attachment (if any) so it doesn't
+      // become an orphan consuming quota on the backend.
+      const prevSid = uploadSessionIdRef.current
+      const prevRealId = realAttachmentIdRef.current
+      if (prevSid && prevRealId) {
+        deleteSessionAttachment(prevSid, prevRealId).catch(() => {
+          // Fire-and-forget — server may have already purged it
+        })
+      }
+
       const token = ++uploadTokenRef.current
       uploadSessionIdRef.current = sessionId
       realAttachmentIdRef.current = null
