@@ -121,6 +121,7 @@ export function streamChat(
   message: string,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
+  attachmentIds?: string[],
 ): { abort: () => void } {
   let fallbackSeq = 0
   let maxDispatchedSeq: number | undefined
@@ -144,8 +145,13 @@ export function streamChat(
     return event === 'error' && payload.fatal !== false
   }
 
+  const body: Record<string, unknown> = { message }
+  if (attachmentIds && attachmentIds.length > 0) {
+    body.attachmentIds = attachmentIds
+  }
+
   const stream = streamGateway(`/qa-sessions/${encodeURIComponent(sessionId)}/messages`, {
-    body: { message },
+    body,
     method: 'POST',
     onError: (error) => {
       if (didAbort || didReceiveFatalError) return

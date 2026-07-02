@@ -1,4 +1,4 @@
-import { Send } from 'lucide-react'
+import { Paperclip, Send } from 'lucide-react'
 import { type KeyboardEvent, useCallback, useEffect, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,12 @@ type ChatInputProps = {
   onChange: (value: string) => void
   size?: 'normal' | 'large'
   className?: string
+  /** Called when a file is selected via the attachment button. */
+  onFileSelect?: (file: File) => void
+  /** Number of ready attachments to show as badge. */
+  attachmentCount?: number
+  /** Whether the attachment button should be disabled (e.g., no session). */
+  disableAttach?: boolean
 }
 
 export default function ChatInput({
@@ -21,8 +27,12 @@ export default function ChatInput({
   onChange,
   size = 'normal',
   className,
+  onFileSelect,
+  attachmentCount = 0,
+  disableAttach = false,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Auto-resize on text change
   useEffect(() => {
@@ -49,7 +59,25 @@ export default function ChatInput({
     }
   }
 
+  const handleAttachClick = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      // Reset so the same file can be re-selected
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      onFileSelect?.(file)
+    },
+    [onFileSelect],
+  )
+
   const canSend = value.trim().length > 0 && !disabled
+  const attachDisabled = disableAttach || disabled
 
   const isLarge = size === 'large'
 
@@ -63,7 +91,36 @@ export default function ChatInput({
         className,
       )}
     >
+      {/* Hidden file input for attachments */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.txt,.docx"
+        className="hidden"
+        onChange={handleFileChange}
+        aria-label="选择附件文件"
+      />
+
       <div className="flex items-end gap-2">
+        {/* Attachment button */}
+        {onFileSelect && (
+          <button
+            type="button"
+            onClick={handleAttachClick}
+            disabled={attachDisabled}
+            className="relative shrink-0 self-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="添加附件"
+            title={disableAttach ? '请先创建对话' : '添加附件'}
+          >
+            <Paperclip className="size-4" />
+            {attachmentCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-medium text-primary-foreground">
+                {attachmentCount > 9 ? '9+' : attachmentCount}
+              </span>
+            )}
+          </button>
+        )}
+
         <Textarea
           ref={textareaRef}
           className={cn(

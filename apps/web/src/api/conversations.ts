@@ -5,7 +5,7 @@
  * Types imported from @/lib/types (re-exported from generated/gateway).
  */
 
-import type { QAMessage, QASession, QASessionStatus } from '@/lib/types'
+import type { QAMessage, QASession, QASessionStatus, SessionAttachmentSummary } from '@/lib/types'
 
 import { buildQuery, gatewayPageRequest, gatewayRequest, requestVoid } from './client'
 
@@ -120,5 +120,69 @@ export async function getSessionMessages(
       includeThinking: params.includeThinking,
       includeCitations: params.includeCitations,
     })}`,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GET /qa-sessions/{sessionId}/attachments?page=&pageSize=
+// ---------------------------------------------------------------------------
+
+export async function listSessionAttachments(
+  sessionId: string,
+  page?: number,
+  pageSize?: number,
+): Promise<{
+  items: SessionAttachmentSummary[]
+  page: { page: number; pageSize: number; total: number }
+}> {
+  return gatewayPageRequest<SessionAttachmentSummary>(
+    `/qa-sessions/${encodeURIComponent(sessionId)}/attachments${buildQuery({
+      page,
+      pageSize,
+    })}`,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// POST /qa-sessions/{sessionId}/attachments (multipart/form-data)
+// ---------------------------------------------------------------------------
+
+export async function uploadSessionAttachment(
+  sessionId: string,
+  file: File,
+): Promise<SessionAttachmentSummary> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return gatewayRequest<SessionAttachmentSummary>(
+    `/qa-sessions/${encodeURIComponent(sessionId)}/attachments`,
+    { method: 'POST', body: formData },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GET /qa-sessions/{sessionId}/attachments/{attachmentId}
+// ---------------------------------------------------------------------------
+
+export async function getSessionAttachment(
+  sessionId: string,
+  attachmentId: string,
+): Promise<SessionAttachmentSummary> {
+  return gatewayRequest<SessionAttachmentSummary>(
+    `/qa-sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(attachmentId)}`,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /qa-sessions/{sessionId}/attachments/{attachmentId}
+// ---------------------------------------------------------------------------
+
+export async function deleteSessionAttachment(
+  sessionId: string,
+  attachmentId: string,
+): Promise<void> {
+  // 204 No Content — use requestVoid which doesn't try to parse the response body
+  await requestVoid(
+    `/qa-sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    { method: 'DELETE' },
   )
 }

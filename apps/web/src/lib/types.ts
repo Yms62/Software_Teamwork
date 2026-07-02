@@ -60,6 +60,12 @@ export type QAAgentToolCall = components['schemas']['QAAgentToolCall']
 export type QASseEventType = components['schemas']['QASseEventType']
 export type QASseEvent = components['schemas']['QASseEvent']
 
+// ── QA Session Attachments ──
+export type SessionAttachmentStatus = components['schemas']['SessionAttachmentStatus']
+export type SessionAttachmentSummary = components['schemas']['SessionAttachmentSummary']
+/** @deprecated Use `SessionAttachmentSummary` instead. */
+export type QASessionAttachment = SessionAttachmentSummary
+
 // ── QA Report Artifacts ──
 export type QAReportArtifact = components['schemas']['QAReportArtifact']
 export type QAReportArtifactPreview = components['schemas']['QAReportArtifactPreview']

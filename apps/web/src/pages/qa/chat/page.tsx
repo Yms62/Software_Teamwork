@@ -3,7 +3,19 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { replayEvents, streamChat } from '@/api/chat'
 import { gatewayFileRequest } from '@/api/client'
-import { ChatInput, ChatMessages, ChatSidebar } from '@/components/chat'
+import {
+  deleteSessionAttachment,
+  getSessionAttachment,
+  listSessionAttachments,
+} from '@/api/conversations'
+import {
+  AttachmentList,
+  AttachmentUploadStatus,
+  ChatInput,
+  ChatMessages,
+  ChatSidebar,
+  useAttachmentUpload,
+} from '@/components/chat'
 import {
   useCreateSession,
   useDeleteSession,
@@ -20,6 +32,7 @@ import type {
   QASession,
   QASessionListItem,
   QAThinkingStep,
+  SessionAttachmentSummary,
 } from '@/lib/types'
 import { useChatStore } from '@/stores/chat-store'
 
@@ -256,6 +269,13 @@ export function ChatPage() {
   const updateSessionMessages = useChatStore((s) => s.updateSessionMessages)
   const appendSessionMessages = useChatStore((s) => s.appendSessionMessages)
   const messagesBySession = useChatStore((s) => s.messagesBySession)
+  const attachmentsBySession = useChatStore((s) => s.attachmentsBySession)
+  const excludedAttachmentIds = useChatStore((s) => s.excludedAttachmentIds)
+  const setSessionAttachments = useChatStore((s) => s.setSessionAttachments)
+  const addAttachment = useChatStore((s) => s.addAttachment)
+  const updateAttachment = useChatStore((s) => s.updateAttachment)
+  const removeAttachment = useChatStore((s) => s.removeAttachment)
+  const toggleAttachmentExcluded = useChatStore((s) => s.toggleAttachmentExcluded)
 
   // ── React Query: messages for active session (loaded separately from QASession) ──
   const { data: serverMessages, isError: messagesError } = useSessionMessages(activeId ?? '')
@@ -265,6 +285,32 @@ export function ChatPage() {
 
   // ── Three-phase state machine: empty → transitioning → active ──
   const [chatPhase, setChatPhase] = useState<'empty' | 'active'>('empty')
+
+  // ── Attachment upload hook ──
+  const handleAttachmentReady = useCallback(
+    (attachment: SessionAttachmentSummary) => {
+      if (!activeId) return
+      // Clean up any optimistic temp attachments for this session
+      const current = useChatStore.getState().attachmentsBySession[activeId] ?? []
+      const tempIds = current.filter((a) => a.id.startsWith('temp-')).map((a) => a.id)
+      for (const tempId of tempIds) {
+        removeAttachment(activeId, tempId)
+      }
+      // Replace or add the real attachment (updateAttachment covers existing, but add is safer for new)
+      const exists = current.some((a) => a.id === attachment.id)
+      if (exists) {
+        updateAttachment(activeId, attachment.id, attachment)
+      } else {
+        addAttachment(activeId, attachment)
+      }
+    },
+    [activeId, updateAttachment, addAttachment, removeAttachment],
+  )
+
+  const { uploadState, uploadFile, dismissUpload } = useAttachmentUpload(
+    activeId,
+    handleAttachmentReady,
+  )
 
   // ── Mutations ──
   const createSessionMut = useCreateSession()
@@ -361,6 +407,58 @@ export function ChatPage() {
   }, [messagesError, activeId, setError])
 
   // ══════════════════════════════════════════════════════════════════════════
+  // Load attachments when active session changes
+  // ══════════════════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    if (!activeId) return
+
+    // Only fetch from server if we don't have local attachments yet
+    const local = useChatStore.getState().attachmentsBySession[activeId]
+    if (local && local.length > 0) return
+
+    listSessionAttachments(activeId)
+      .then((result) => {
+        setSessionAttachments(activeId, result.items)
+      })
+      .catch(() => {
+        // Attachments are optional; don't surface loading errors as critical
+      })
+  }, [activeId, setSessionAttachments])
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Background polling for non-terminal attachments (uploaded / parsing)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    if (!activeId) return
+
+    const currentAttachments = attachmentsBySession[activeId] ?? []
+    const pollingIds = currentAttachments
+      .filter((a) => a.status === 'uploaded' || a.status === 'parsing')
+      .map((a) => a.id)
+
+    if (pollingIds.length === 0) return
+
+    const interval = setInterval(() => {
+      const sessionId = activeId
+      if (!sessionId) return
+
+      for (const id of pollingIds) {
+        getSessionAttachment(sessionId, id)
+          .then((updated) => {
+            updateAttachment(sessionId, id, updated)
+          })
+          .catch(() => {
+            // Silently continue polling
+          })
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [activeId, attachmentsBySession, updateAttachment])
+
+  // ══════════════════════════════════════════════════════════════════════════
   // Cleanup SSE on unmount
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -382,6 +480,60 @@ export function ChatPage() {
       }),
     [sessions, messagesBySession],
   )
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Attachment handlers
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const handleFileSelect = useCallback(
+    (file: File) => {
+      if (!activeId) return
+
+      // Optimistically add the attachment to the store
+      const tempAttachment: SessionAttachmentSummary = {
+        id: `temp-${Date.now()}`,
+        sessionId: activeId,
+        filename: file.name,
+        contentType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+        status: 'uploaded',
+        createdAt: new Date().toISOString(),
+      }
+      addAttachment(activeId, tempAttachment)
+
+      // Start the actual upload + polling flow
+      uploadFile(file)
+    },
+    [activeId, addAttachment, uploadFile],
+  )
+
+  const handleDeleteAttachment = useCallback(
+    async (attachmentId: string) => {
+      if (!activeId) return
+      try {
+        await deleteSessionAttachment(activeId, attachmentId)
+        removeAttachment(activeId, attachmentId)
+      } catch {
+        setError('删除附件失败')
+      }
+    },
+    [activeId, removeAttachment, setError],
+  )
+
+  const handleToggleAttachmentExcluded = useCallback(
+    (attachmentId: string) => {
+      if (!activeId) return
+      toggleAttachmentExcluded(activeId, attachmentId)
+    },
+    [activeId, toggleAttachmentExcluded],
+  )
+
+  // ── Derived attachment data ──
+  const activeAttachments = activeId ? (attachmentsBySession[activeId] ?? []) : []
+  const activeExcludedIds = activeId ? (excludedAttachmentIds[activeId] ?? []) : []
+  const visibleAttachmentCount = activeAttachments.filter(
+    (a) => a.status !== 'failed' && a.status !== 'purged',
+  ).length
 
   // ══════════════════════════════════════════════════════════════════════════
   // Create session
@@ -875,7 +1027,24 @@ export function ChatPage() {
         },
       }
 
-      const { abort } = streamChat(uid, trimmed, streamHandlers)
+      // Collect ready attachment IDs at call time (latest store state)
+      const currentState = useChatStore.getState()
+      const currentAttachments = currentState.attachmentsBySession[uid] ?? []
+      const currentExcluded = currentState.excludedAttachmentIds[uid] ?? []
+      const attachmentIds = currentAttachments
+        .filter(
+          (a) =>
+            a.status === 'ready' && !currentExcluded.includes(a.id) && !a.id.startsWith('temp-'),
+        )
+        .map((a) => a.id)
+
+      const { abort } = streamChat(
+        uid,
+        trimmed,
+        streamHandlers,
+        undefined,
+        attachmentIds.length > 0 ? attachmentIds : undefined,
+      )
 
       abortRef.current = abort
     },
@@ -1021,12 +1190,33 @@ export function ChatPage() {
           }
         >
           <div ref={inputAreaRef} className={chatPhase === 'empty' ? 'w-[76%]' : 'w-full'}>
+            {/* Attachment upload status indicator */}
+            <div className="mb-2">
+              <AttachmentUploadStatus
+                sessionId={activeId}
+                state={uploadState}
+                onDismiss={dismissUpload}
+              />
+            </div>
+
+            {/* Attachment list */}
+            <AttachmentList
+              attachments={activeAttachments}
+              excludedIds={activeExcludedIds}
+              onToggleExcluded={handleToggleAttachmentExcluded}
+              onDelete={handleDeleteAttachment}
+              sessionId={activeId}
+            />
+
             <ChatInput
               onSend={sendMessage}
               disabled={streaming}
               value={inputText}
               onChange={setInputText}
               size={chatPhase === 'empty' ? 'large' : 'normal'}
+              onFileSelect={handleFileSelect}
+              attachmentCount={visibleAttachmentCount}
+              disableAttach={!activeId}
             />
           </div>
           {chatPhase === 'empty' && (
