@@ -157,7 +157,8 @@ export function useAttachmentUpload(
     abortedRef.current = true
     clearPollTimer()
     setState({ phase: 'idle' })
-  }, [clearPollTimer])
+    onCleanup?.()
+  }, [clearPollTimer, onCleanup])
 
   useEffect(() => {
     return () => {

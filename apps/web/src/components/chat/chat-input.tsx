@@ -1,5 +1,5 @@
 import { Paperclip, Send } from 'lucide-react'
-import { type KeyboardEvent, useCallback, useEffect, useRef } from 'react'
+import { type ChangeEvent, type KeyboardEvent, useCallback, useEffect, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -67,7 +67,7 @@ export default function ChatInput({
   }, [])
 
   const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
       // Reset so the same file can be re-selected

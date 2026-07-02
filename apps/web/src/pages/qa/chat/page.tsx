@@ -422,10 +422,6 @@ export function ChatPage() {
   useEffect(() => {
     if (!activeId) return
 
-    // Only fetch from server if we don't have local attachments yet
-    const local = useChatStore.getState().attachmentsBySession[activeId]
-    if (local && local.length > 0) return
-
     listSessionAttachments(activeId)
       .then((result) => {
         setSessionAttachments(activeId, result.items)
