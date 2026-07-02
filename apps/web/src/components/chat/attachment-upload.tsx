@@ -130,7 +130,7 @@ export function useAttachmentUpload(
 
       poll()
     },
-    [onAttachmentReady],
+    [onAttachmentReady, onCleanup],
   )
 
   const uploadFile = useCallback(
@@ -150,7 +150,7 @@ export function useAttachmentUpload(
         }
       }
     },
-    [sessionId, startPoll],
+    [sessionId, startPoll, onCleanup],
   )
 
   const dismissUpload = useCallback(() => {

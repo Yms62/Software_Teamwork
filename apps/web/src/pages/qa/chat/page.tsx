@@ -8,17 +8,9 @@ import {
   getSessionAttachment,
   listSessionAttachments,
 } from '@/api/conversations'
-import {
-  AttachmentList,
-  AttachmentUploadStatus,
-} from '@/components/chat'
+import { AttachmentList, AttachmentUploadStatus } from '@/components/chat'
+import { ChatInput, ChatMessages, ChatSidebar, useAttachmentUpload } from '@/components/chat'
 import { ConfirmDialog } from '@/components/common'
-import {
-  ChatInput,
-  ChatMessages,
-  ChatSidebar,
-  useAttachmentUpload,
-} from '@/components/chat'
 import {
   useCreateSession,
   useDeleteSession,
@@ -1164,104 +1156,106 @@ export function ChatPage() {
   // ══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="flex h-full">
-      {/* Left: session sidebar */}
-      <ChatSidebar
-        sessions={sidebarItems}
-        activeId={activeId ?? ''}
-        isLoading={sessionsLoading}
-        fetchError={sessionsError ? '加载会话列表失败，请检查网络连接' : null}
-        onRetryFetch={() => refetchSessions()}
-        onSelect={setActiveId}
-        onCreate={handleCreate}
-        onDelete={handleDelete}
-        onRename={handleRename}
-      />
+    <>
+      <div className="flex h-full">
+        {/* Left: session sidebar */}
+        <ChatSidebar
+          sessions={sidebarItems}
+          activeId={activeId ?? ''}
+          isLoading={sessionsLoading}
+          fetchError={sessionsError ? '加载会话列表失败，请检查网络连接' : null}
+          onRetryFetch={() => refetchSessions()}
+          onSelect={setActiveId}
+          onCreate={handleCreate}
+          onDelete={handleDelete}
+          onRename={handleRename}
+        />
 
-      {/* Right: main chat area — single input DOM node with FLIP animation */}
-      <div className="flex min-w-0 flex-1 flex-col relative">
-        {/* Messages — only when active */}
-        {chatPhase === 'active' && (
-          <div className="page-enter-right flex min-h-0 flex-1 flex-col">
-            <ChatMessages
-              messages={activeMessages}
-              streaming={streaming}
-              error={error}
-              onRetry={lastFailedMsg ? handleRetry : undefined}
-              onArtifactDownload={handleArtifactDownload}
-            />
-          </div>
-        )}
-
-        {/* Input area — ALWAYS the same DOM node (stable ref for FLIP).
-            empty: absolutely positioned at center. active/transitioning: static at bottom. */}
-        <div
-          className={
-            chatPhase === 'empty'
-              ? 'absolute inset-0 flex flex-col items-center justify-center gap-4 px-6'
-              : 'shrink-0'
-          }
-        >
-          <div ref={inputAreaRef} className={chatPhase === 'empty' ? 'w-[76%]' : 'w-full'}>
-            {/* Attachment upload status indicator */}
-            <div className="mb-2">
-              <AttachmentUploadStatus
-                sessionId={activeId}
-                state={uploadState}
-                onDismiss={dismissUpload}
+        {/* Right: main chat area — single input DOM node with FLIP animation */}
+        <div className="flex min-w-0 flex-1 flex-col relative">
+          {/* Messages — only when active */}
+          {chatPhase === 'active' && (
+            <div className="page-enter-right flex min-h-0 flex-1 flex-col">
+              <ChatMessages
+                messages={activeMessages}
+                streaming={streaming}
+                error={error}
+                onRetry={lastFailedMsg ? handleRetry : undefined}
+                onArtifactDownload={handleArtifactDownload}
               />
             </div>
-
-            {/* Attachment list */}
-            <AttachmentList
-              attachments={activeAttachments}
-              excludedIds={activeExcludedIds}
-              onToggleExcluded={handleToggleAttachmentExcluded}
-              onDelete={handleDeleteAttachment}
-              sessionId={activeId}
-            />
-
-            <ChatInput
-              onSend={sendMessage}
-              disabled={streaming}
-              value={inputText}
-              onChange={setInputText}
-              size={chatPhase === 'empty' ? 'large' : 'normal'}
-              onFileSelect={handleFileSelect}
-              onAttachError={(msg) => setError(msg)}
-              attachmentCount={visibleAttachmentCount}
-              disableAttach={!activeId}
-            />
-          </div>
-          {chatPhase === 'empty' && (
-            <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTED_PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  className="flex items-center rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-primary transition-all hover:bg-primary/10 hover:border-primary/50"
-                  onClick={() => handleSuggested(p)}
-                >
-                  <ArrowUpRight className="mr-1 inline-block size-3.5 shrink-0" />
-                  {p}
-                </button>
-              ))}
-            </div>
           )}
+
+          {/* Input area — ALWAYS the same DOM node (stable ref for FLIP).
+            empty: absolutely positioned at center. active/transitioning: static at bottom. */}
+          <div
+            className={
+              chatPhase === 'empty'
+                ? 'absolute inset-0 flex flex-col items-center justify-center gap-4 px-6'
+                : 'shrink-0'
+            }
+          >
+            <div ref={inputAreaRef} className={chatPhase === 'empty' ? 'w-[76%]' : 'w-full'}>
+              {/* Attachment upload status indicator */}
+              <div className="mb-2">
+                <AttachmentUploadStatus
+                  sessionId={activeId}
+                  state={uploadState}
+                  onDismiss={dismissUpload}
+                />
+              </div>
+
+              {/* Attachment list */}
+              <AttachmentList
+                attachments={activeAttachments}
+                excludedIds={activeExcludedIds}
+                onToggleExcluded={handleToggleAttachmentExcluded}
+                onDelete={handleDeleteAttachment}
+                sessionId={activeId}
+              />
+
+              <ChatInput
+                onSend={sendMessage}
+                disabled={streaming}
+                value={inputText}
+                onChange={setInputText}
+                size={chatPhase === 'empty' ? 'large' : 'normal'}
+                onFileSelect={handleFileSelect}
+                onAttachError={(msg) => setError(msg)}
+                attachmentCount={visibleAttachmentCount}
+                disableAttach={!activeId}
+              />
+            </div>
+            {chatPhase === 'empty' && (
+              <div className="flex flex-wrap justify-center gap-2">
+                {SUGGESTED_PROMPTS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className="flex items-center rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-primary transition-all hover:bg-primary/10 hover:border-primary/50"
+                    onClick={() => handleSuggested(p)}
+                  >
+                    <ArrowUpRight className="mr-1 inline-block size-3.5 shrink-0" />
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-    <ConfirmDialog
-      cancelLabel="取消"
-      confirmLabel="确认删除"
-      description="附件删除后本次对话将无法引用，确认删除？"
-      onConfirm={() => void confirmDeleteAttachment()}
-      onOpenChange={(open) => {
-        if (!open) setDeleteAttachmentTarget(null)
-      }}
-      open={Boolean(deleteAttachmentTarget)}
-      title="确定删除该附件？"
-      variant="destructive"
-    />
+      <ConfirmDialog
+        cancelLabel="取消"
+        confirmLabel="确认删除"
+        description="附件删除后本次对话将无法引用，确认删除？"
+        onConfirm={() => void confirmDeleteAttachment()}
+        onOpenChange={(open) => {
+          if (!open) setDeleteAttachmentTarget(null)
+        }}
+        open={Boolean(deleteAttachmentTarget)}
+        title="确定删除该附件？"
+        variant="destructive"
+      />
+    </>
   )
 }
