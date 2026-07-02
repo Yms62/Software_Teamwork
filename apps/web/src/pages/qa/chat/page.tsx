@@ -11,6 +11,9 @@ import {
 import {
   AttachmentList,
   AttachmentUploadStatus,
+} from '@/components/chat'
+import { ConfirmDialog } from '@/components/common'
+import {
   ChatInput,
   ChatMessages,
   ChatSidebar,
@@ -512,18 +515,23 @@ export function ChatPage() {
     [activeId, addAttachment, uploadFile],
   )
 
-  const handleDeleteAttachment = useCallback(
-    async (attachmentId: string) => {
-      if (!activeId) return
-      try {
-        await deleteSessionAttachment(activeId, attachmentId)
-        removeAttachment(activeId, attachmentId)
-      } catch {
-        setError('删除附件失败')
-      }
-    },
-    [activeId, removeAttachment, setError],
-  )
+  const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<string | null>(null)
+
+  const handleDeleteAttachment = useCallback((attachmentId: string) => {
+    setDeleteAttachmentTarget(attachmentId)
+  }, [])
+
+  const confirmDeleteAttachment = useCallback(async () => {
+    const target = deleteAttachmentTarget
+    setDeleteAttachmentTarget(null)
+    if (!target || !activeId) return
+    try {
+      await deleteSessionAttachment(activeId, target)
+      removeAttachment(activeId, target)
+    } catch {
+      setError('删除附件失败')
+    }
+  }, [activeId, deleteAttachmentTarget, removeAttachment, setError])
 
   const handleToggleAttachmentExcluded = useCallback(
     (attachmentId: string) => {
@@ -1243,5 +1251,17 @@ export function ChatPage() {
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      cancelLabel="取消"
+      confirmLabel="确认删除"
+      description="附件删除后本次对话将无法引用，确认删除？"
+      onConfirm={() => void confirmDeleteAttachment()}
+      onOpenChange={(open) => {
+        if (!open) setDeleteAttachmentTarget(null)
+      }}
+      open={Boolean(deleteAttachmentTarget)}
+      title="确定删除该附件？"
+      variant="destructive"
+    />
   )
 }
