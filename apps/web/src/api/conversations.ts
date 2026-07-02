@@ -150,12 +150,13 @@ export async function listSessionAttachments(
 export async function uploadSessionAttachment(
   sessionId: string,
   file: File,
+  signal?: AbortSignal,
 ): Promise<SessionAttachmentSummary> {
   const formData = new FormData()
   formData.append('file', file)
   return gatewayRequest<SessionAttachmentSummary>(
     `/qa-sessions/${encodeURIComponent(sessionId)}/attachments`,
-    { method: 'POST', body: formData },
+    { method: 'POST', body: formData, signal },
   )
 }
 

@@ -1,7 +1,11 @@
 import { Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { getSessionAttachment, uploadSessionAttachment } from '@/api/conversations'
+import {
+  deleteSessionAttachment,
+  getSessionAttachment,
+  uploadSessionAttachment,
+} from '@/api/conversations'
 import type { SessionAttachmentSummary } from '@/lib/types'
 
 export type UploadStateData =
@@ -71,13 +75,19 @@ export default function AttachmentUploadStatus({
 export function useAttachmentUpload(
   sessionId: string | null,
   onAttachmentReady: (attachment: SessionAttachmentSummary) => void,
-  onCleanup?: () => void,
+  onCleanup?: (uploadSessionId: string) => void,
 ) {
   const [state, setState] = useState<UploadStateData>({ phase: 'idle' })
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** Per-upload token — incremented on each new upload or dismiss so stale async
    *  callbacks cannot overwrite the current upload's state. */
   const uploadTokenRef = useRef(0)
+  /** AbortController for the in-flight upload request. */
+  const abortRef = useRef<AbortController | null>(null)
+  /** Real attachment ID returned by the upload API, so we can delete it on cancel. */
+  const realAttachmentIdRef = useRef<string | null>(null)
+  /** sessionId captured at upload-start time so cleanup always targets the right session. */
+  const uploadSessionIdRef = useRef<string | null>(null)
 
   const clearPollTimer = useCallback(() => {
     if (pollTimerRef.current !== null) {
@@ -97,7 +107,7 @@ export function useAttachmentUpload(
           filename: attachment.filename,
           message: '解析超时，请稍后重试',
         })
-        onCleanup?.()
+        onCleanup?.(uploadSessionIdRef.current!)
         return
       }
 
@@ -118,7 +128,7 @@ export function useAttachmentUpload(
               filename: attachment.filename,
               message: updated.errorMessage ?? '文件解析失败',
             })
-            onCleanup?.()
+            onCleanup?.(uploadSessionIdRef.current!)
           } else {
             pollTimerRef.current = setTimeout(() => {
               startPoll(updated, attemptsSoFar + 1, token)
@@ -141,32 +151,58 @@ export function useAttachmentUpload(
     async (file: File) => {
       if (!sessionId) return
       const token = ++uploadTokenRef.current
+      uploadSessionIdRef.current = sessionId
+      realAttachmentIdRef.current = null
+
+      // Cancel any previous in-flight request
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
       setState({ phase: 'uploading', filename: file.name })
 
       try {
-        const attachment = await uploadSessionAttachment(sessionId, file)
+        const attachment = await uploadSessionAttachment(sessionId, file, controller.signal)
         if (token !== uploadTokenRef.current) return
+        realAttachmentIdRef.current = attachment.id
         startPoll(attachment, 0, token)
-      } catch {
+      } catch (err: unknown) {
         if (token !== uploadTokenRef.current) return
+        // Don't surface AbortError as a user-visible failure
+        if (err instanceof DOMException && err.name === 'AbortError') return
         setState({ phase: 'error', filename: file.name, message: '上传失败，请重试' })
-        onCleanup?.()
+        onCleanup?.(uploadSessionIdRef.current!)
       }
     },
     [sessionId, startPoll, onCleanup],
   )
 
   const dismissUpload = useCallback(() => {
+    const sid = uploadSessionIdRef.current
+    const realId = realAttachmentIdRef.current
     uploadTokenRef.current++
+    abortRef.current?.abort()
+    abortRef.current = null
     clearPollTimer()
     setState({ phase: 'idle' })
-    onCleanup?.()
+
+    // If the upload already created a real attachment on the backend, delete it
+    // so it won't reappear on next session load. Fire-and-forget.
+    if (sid && realId) {
+      deleteSessionAttachment(sid, realId).catch(() => {
+        // Silently ignore — server may not have persisted it yet
+      })
+    }
+
+    onCleanup?.(sid!)
   }, [clearPollTimer, onCleanup])
 
   useEffect(() => {
     const tokenRef = uploadTokenRef
+    const abort = abortRef.current
     return () => {
       tokenRef.current++
+      abort?.abort()
       clearPollTimer()
     }
   }, [clearPollTimer])

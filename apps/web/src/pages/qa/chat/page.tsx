@@ -301,14 +301,17 @@ export function ChatPage() {
     [activeId, updateAttachment, addAttachment, removeAttachment],
   )
 
-  const handleAttachCleanup = useCallback(() => {
-    if (!activeId) return
-    const current = useChatStore.getState().attachmentsBySession[activeId] ?? []
-    const tempIds = current.filter((a) => a.id.startsWith('temp-')).map((a) => a.id)
-    for (const tempId of tempIds) {
-      removeAttachment(activeId, tempId)
-    }
-  }, [activeId, removeAttachment])
+  const handleAttachCleanup = useCallback(
+    (uploadSessionId: string) => {
+      if (!uploadSessionId) return
+      const current = useChatStore.getState().attachmentsBySession[uploadSessionId] ?? []
+      const tempIds = current.filter((a) => a.id.startsWith('temp-')).map((a) => a.id)
+      for (const tempId of tempIds) {
+        removeAttachment(uploadSessionId, tempId)
+      }
+    },
+    [removeAttachment],
+  )
 
   const { uploadState, uploadFile, dismissUpload } = useAttachmentUpload(
     activeId,
@@ -443,7 +446,9 @@ export function ChatPage() {
 
     const currentAttachments = attachmentsBySession[activeId] ?? []
     const pollingIds = currentAttachments
-      .filter((a) => a.status === 'uploaded' || a.status === 'parsing')
+      .filter(
+        (a) => (a.status === 'uploaded' || a.status === 'parsing') && !a.id.startsWith('temp-'),
+      )
       .map((a) => a.id)
 
     if (pollingIds.length === 0) return

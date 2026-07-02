@@ -103,7 +103,11 @@ export default function ChatInput({
         onAttachError?.('不支持的文件类型，仅支持 PDF、PNG、JPEG、TXT、DOCX')
         return
       }
-      onFileSelect?.(file)
+      // If the browser reported an empty MIME, construct a new File with the
+      // inferred type so the Gateway multipart Content-Type check passes
+      const fileToUpload =
+        file.type !== '' ? file : new File([file], file.name, { type: effectiveType })
+      onFileSelect?.(fileToUpload)
     },
     [onFileSelect, onAttachError],
   )
