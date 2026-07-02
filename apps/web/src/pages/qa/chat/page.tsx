@@ -422,14 +422,18 @@ export function ChatPage() {
 
     listSessionAttachments(activeId)
       .then((result) => {
-        // Merge server list with local in-flight items (temp-* or recently
-        // uploaded attachments that haven't appeared in the server response
-        // yet). Server items are authoritative for matching IDs; local items
-        // with IDs not present in the server list are preserved so a stale
-        // list response doesn't overwrite a just-completed upload.
+        // Merge: server list is authoritative for real attachments. Only keep
+        // local items that are temp-* or still in-flight (uploaded/parsing)
+        // and not yet visible in the server response. Stale ready/failed items
+        // missing from server (deleted in another tab, TTL purge, etc.) are
+        // dropped so they won't be included in the next message send.
         const serverIds = new Set(result.items.map((a) => a.id))
         const local = useChatStore.getState().attachmentsBySession[activeId] ?? []
-        const localOnly = local.filter((a) => !serverIds.has(a.id))
+        const localOnly = local.filter(
+          (a) =>
+            !serverIds.has(a.id) &&
+            (a.id.startsWith('temp-') || a.status === 'uploaded' || a.status === 'parsing'),
+        )
         setSessionAttachments(activeId, [...result.items, ...localOnly])
       })
       .catch(() => {
