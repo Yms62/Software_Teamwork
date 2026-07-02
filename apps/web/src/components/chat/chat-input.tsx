@@ -75,34 +75,24 @@ export default function ChatInput({
         fileInputRef.current.value = ''
       }
       // Validate against Gateway contract: max 20 MB, allowed MIME types.
-      // Per F-019 spec: PDF, DOCX, PPTX, XLSX, MD, TXT, PNG, JPG, GIF, BMP, WebP.
+      // Must match the multipart Content-Type allowlist in the generated Gateway
+      // contract (UploadSessionAttachmentRequest). Expand here only after the
+      // OpenAPI schema and generated types are updated.
       const ALLOWED_TYPES = [
         'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/markdown',
-        'text/plain',
         'image/png',
         'image/jpeg',
-        'image/gif',
-        'image/bmp',
-        'image/webp',
+        'text/plain',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       ]
       // Map file extensions to MIME types when the browser returns an empty type
       const EXT_MIME: Record<string, string> = {
         '.pdf': 'application/pdf',
-        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        '.md': 'text/markdown',
-        '.txt': 'text/plain',
         '.png': 'image/png',
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',
-        '.gif': 'image/gif',
-        '.bmp': 'image/bmp',
-        '.webp': 'image/webp',
+        '.txt': 'text/plain',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       }
       if (file.size > 20 * 1024 * 1024) {
         onAttachError?.('文件大小不能超过 20MB')
@@ -113,9 +103,7 @@ export default function ChatInput({
           ? file.type
           : (EXT_MIME[file.name.slice(file.name.lastIndexOf('.')).toLowerCase()] ?? '')
       if (!ALLOWED_TYPES.includes(effectiveType)) {
-        onAttachError?.(
-          '不支持的文件类型，仅支持 PDF、DOCX、PPTX、XLSX、MD、TXT、PNG、JPG、GIF、BMP、WebP',
-        )
+        onAttachError?.('不支持的文件类型，仅支持 PDF、PNG、JPEG、TXT、DOCX')
         return
       }
       // If the browser reported an empty MIME, construct a new File with the
@@ -146,7 +134,7 @@ export default function ChatInput({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.png,.jpg,.jpeg,.gif,.bmp,.webp"
+        accept=".pdf,.png,.jpg,.jpeg,.txt,.docx"
         className="hidden"
         onChange={handleFileChange}
         aria-label="选择附件文件"

@@ -215,11 +215,26 @@ export function useAttachmentUpload(
   }, [clearPollTimer, onCleanup])
 
   useEffect(() => {
+    // Capture ref objects (not .current) so the cleanup closure reads the
+    // latest value at unmount time, not the stale value at mount time.
     const tokenRef = uploadTokenRef
-    const abort = abortRef.current
+    const ctrlRef = abortRef
+    const sessionRef = uploadSessionIdRef
+    const realIdRef = realAttachmentIdRef
     return () => {
       tokenRef.current++
-      abort?.abort()
+      ctrlRef.current?.abort()
+      ctrlRef.current = null
+
+      const sid = sessionRef.current
+      const realId = realIdRef.current
+      if (sid && realId) {
+        deleteSessionAttachment(sid, realId).catch(() => {
+          // Fire-and-forget — server may not have persisted it yet
+        })
+        realIdRef.current = null
+      }
+
       clearPollTimer()
     }
   }, [clearPollTimer])
