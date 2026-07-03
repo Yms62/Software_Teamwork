@@ -323,11 +323,15 @@ function SelectContent({ className, children, ...props }: SelectContentProps) {
       <div
         className={cn(
           'mt-1 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-md transition-all duration-300 ease-out',
-          open ? 'opacity-100 overflow-y-auto' : 'max-h-0 opacity-0 border-0',
+          open ? 'opacity-100' : 'max-h-0 opacity-0 border-0',
         )}
         style={open ? { maxHeight: Math.min(contentHeight, 360) } : undefined}
       >
-        <div ref={innerRef} className="p-1">
+        <div
+          ref={innerRef}
+          className="max-h-[360px] overflow-y-auto p-1"
+          style={open ? { maxHeight: Math.min(contentHeight, 360) } : undefined}
+        >
           <SelectContentInner>{children}</SelectContentInner>
         </div>
       </div>
